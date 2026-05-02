@@ -60,7 +60,7 @@ main :: proc() {
 }
 
 init :: proc() {
-	k2.init(900, 720, "karl2d gamejam 2026")
+	k2.init(900, 720, "karl2d gamejam 2026", options = {window_mode = .Windowed_Resizable})
 	font = k2.load_font_from_bytes(#load("square.ttf"))
 	font_vec2 = k2.measure_text("a", font_size, font)
 	// fmt.println("font vec2:", font_vec2)
