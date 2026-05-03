@@ -1,6 +1,8 @@
 package game
 
 import "core:fmt"
+import "core:math"
+import "core:math/noise"
 import "core:math/rand"
 import k2 "karl2d"
 
@@ -9,6 +11,7 @@ anim_timer_max: int = 20
 player_pos: k2.Vec2 = {}
 error: bool = false
 
+screen_size: k2.Vec2
 font: k2.Font
 font_size: f32 = 14 * 4
 font_vec2: k2.Vec2
@@ -61,6 +64,7 @@ main :: proc() {
 
 init :: proc() {
 	k2.init(900, 720, "karl2d gamejam 2026", options = {window_mode = .Windowed_Resizable})
+	screen_size = k2.get_screen_size()
 	font = k2.load_font_from_bytes(#load("square.ttf"))
 	font_vec2 = k2.measure_text("a", font_size, font)
 	// fmt.println("font vec2:", font_vec2)
@@ -70,6 +74,8 @@ init :: proc() {
 		zoom   = 1,
 	}
 	// fmt.println(fmt.tprint(k2.Keyboard_Key.Space))
+	// x, y: f32 = -54.0, 56.0
+	// fmt.println("floor:", math.floor(x / y))
 }
 
 lerp :: proc(a, b: k2.Vec2, t: f32) -> k2.Vec2 {
@@ -79,15 +85,19 @@ lerp :: proc(a, b: k2.Vec2, t: f32) -> k2.Vec2 {
 handle_direction :: proc() {
 	if k2.key_went_down(.Right) {
 		dir = .Right
+		// fmt.println("tiles#", len(ns))
 	}
 	if k2.key_went_down(.Down) {
 		dir = .Down
+		// fmt.println("tiles#", len(ns))
 	}
 	if k2.key_went_down(.Left) {
 		dir = .Left
+		// fmt.println("tiles#", len(ns))
 	}
 	if k2.key_went_down(.Up) {
 		dir = .Up
+		// fmt.println("tiles#", len(ns))
 	}
 }
 
@@ -207,68 +217,69 @@ move_player :: proc() {
 	if key == .None {
 		return
 	}
-	// fmt.println("move_player:", key)
 
-	d, r, u, l := ns[1], ns[3], ns[5], ns[7]
+	r := k2.Vec2{player_pos.x + font_size, player_pos.y}
+	u := k2.Vec2{player_pos.x, player_pos.y - font_size}
+	l := k2.Vec2{player_pos.x - font_size, player_pos.y}
+	d := k2.Vec2{player_pos.x, player_pos.y + font_size}
+
 	#partial switch dir {
-	case .Down:
-		if key == d.key {
-			error = false
-			player_pos = d.pos
-			// fmt.println("Player:", player_pos)
-		} else {
-			error = true
-		}
 	case .Right:
-		if key == r.key {
+		char := get_char_at(r.x, r.y)
+		if key == char {
 			error = false
-			player_pos = r.pos
-			// fmt.println("Player:", player_pos)
+			player_pos = r
 		} else {
 			error = true
 		}
 	case .Up:
-		if key == u.key {
+		char := get_char_at(u.x, u.y)
+		if key == char {
 			error = false
-			player_pos = u.pos
-			// fmt.println("Player:", player_pos)
+			player_pos = u
 		} else {
 			error = true
 		}
 	case .Left:
-		if key == l.key {
+		char := get_char_at(l.x, l.y)
+		if key == char {
 			error = false
-			player_pos = l.pos
-			// fmt.println("Player:", player_pos)
+			player_pos = l
+		} else {
+			error = true
+		}
+	case .Down:
+		char := get_char_at(d.x, d.y)
+		if key == char {
+			error = false
+			player_pos = d
 		} else {
 			error = true
 		}
 	}
 }
 
-fill_neighbors :: proc() {
-	for level in 1 ..= 29 {
-		for i in 0 ..< (8 * level) {
-			x, y: f32
-			side := i / (2 * level)
-			offset := i % (2 * level)
+get_char_at :: proc(x, y: f32) -> k2.Keyboard_Key {
+	n := noise.noise_2d(123456, {f64(x), f64(y)})
+	i := abs(int(n * 123456)) % len(rand_keys)
+	return rand_keys[i]
+}
 
-			switch side {
-			case 0:
-				x, y = -f32(level) * font_size + f32(offset) * font_size, f32(level) * font_size
-			case 1:
-				x, y = f32(level) * font_size, f32(level) * font_size - f32(offset) * font_size
-			case 2:
-				x, y = f32(level) * font_size - f32(offset) * font_size, -f32(level) * font_size
-			case 3:
-				x, y = -f32(level) * font_size, -f32(level) * font_size + f32(offset) * font_size
-			}
-			px, py := player_pos.x + f32(x), player_pos.y + f32(y)
-			append(
-				&ns,
-				grid{k2.Vec2{px, py}, rand_keys[abs(int(px * 17 + py * 19)) % len(rand_keys)]},
-			)
+fill_screen :: proc() {
+	sx, sy: f32 = 0, 0
+	wh := k2.screen_to_world(screen_size, camera)
+	w, h := wh.x, wh.y
+	xy := k2.screen_to_world({sx, sy}, camera)
+	x, y := xy.x, xy.y
+	mx, my := math.floor(x / font_size), math.floor(y / font_size)
+	x = mx * font_size
+	for x <= w {
+		y = my * font_size
+		for y <= h {
+			append(&ns, grid{k2.Vec2{x, y}, get_char_at(x, y)})
+			y += font_size
 		}
+		x += font_size
 	}
 }
 
@@ -281,6 +292,7 @@ draw_neighbors :: proc() {
 			k2.draw_text(fmt.tprint(n.key), n.pos, font_size, k2.Color{183, 183, 183, 183}, font)
 		}
 	}
+	// k2.draw_rect_outline({-952 + 56, -56 * 13, font_size, font_size}, 2.0, k2.DARK_RED)
 }
 
 step :: proc() -> bool {
@@ -288,7 +300,7 @@ step :: proc() -> bool {
 		return false
 	}
 
-	fill_neighbors()
+	fill_screen()
 	handle_direction()
 	handle_characters()
 	move_player()
@@ -317,7 +329,7 @@ step :: proc() -> bool {
 		anim_timer = 0
 		k2.draw_rect(
 			{player_pos.x, player_pos.y, font_size, font_size},
-			k2.Color{183, 83, 183, 83},
+			k2.Color{183, 83, 183, 245},
 		)
 		#partial switch dir {
 		case .Left:
